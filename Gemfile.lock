@@ -1,0 +1,47 @@
+GEM
+  remote: https://rubygems.org/
+  specs:
+    csv (3.3.5)
+    diff-lcs (1.6.2)
+    fiddle (1.1.8)
+    logger (1.7.0)
+    net-ssh (7.3.0)
+    rake-compiler-dock (1.11.0)
+    ratatui_ruby (1.4.1)
+      rb_sys (~> 0.9)
+      rexml (~> 3.4)
+    ratatui_ruby (1.4.1-arm64-darwin-24)
+      rb_sys (~> 0.9)
+      rexml (~> 3.4)
+    rb_sys (0.9.124)
+      rake-compiler-dock (= 1.11.0)
+    rexml (3.4.4)
+    rspec (3.13.2)
+      rspec-core (~> 3.13.0)
+      rspec-expectations (~> 3.13.0)
+      rspec-mocks (~> 3.13.0)
+    rspec-core (3.13.6)
+      rspec-support (~> 3.13.0)
+    rspec-expectations (3.13.5)
+      diff-lcs (>= 1.2.0, < 2.0)
+      rspec-support (~> 3.13.0)
+    rspec-mocks (3.13.7)
+      diff-lcs (>= 1.2.0, < 2.0)
+      rspec-support (~> 3.13.0)
+    rspec-support (3.13.7)
+
+PLATFORMS
+  arm64-darwin
+  ruby
+  x86_64-darwin
+
+DEPENDENCIES
+  csv
+  fiddle
+  logger
+  net-ssh (~> 7.0)
+  ratatui_ruby
+  rspec (~> 3.12)
+
+BUNDLED WITH
+   2.7.2
