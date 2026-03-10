@@ -8,6 +8,7 @@ A minimal macOS TUI (Terminal User Interface) application for managing SSH SOCKS
 - List configured remote servers in a scrollable table
 - Add, edit, and delete server configurations
 - Connect/disconnect from servers with keyboard shortcuts
+- **Real-time connection stats** - Duration and latency monitoring displayed in a dedicated panel
 - Automatic SOCKS proxy configuration via macOS network settings
 - SSH agent and key-based authentication support
 - Comprehensive logging for debugging
@@ -58,6 +59,10 @@ You can add the executable to your `PATH` to run it from anywhere.
    - Establish an SSH tunnel with dynamic port forwarding (`ssh -D`)
    - Enable the SOCKS proxy in macOS network settings
 4. Status will show as "● Connected" when successful
+5. A **Connection Stats** panel appears at the top showing:
+   - Server name and SOCKS port
+   - Connection duration (HH:MM:SS format)
+   - Latency to remote server (ping time in ms)
 
 ### Disconnecting
 
@@ -77,6 +82,16 @@ Stored in:
 ```
 
 This file is automatically managed by the application.
+
+### Connection Statistics
+
+When connected to a server, the application displays real-time statistics:
+
+**Connection Duration**: Tracks how long you've been connected (updated every frame)
+
+**Latency Monitoring**: Background thread pings the remote server every 5 seconds to measure round-trip time
+
+The stats panel appears automatically at the top of the screen when connected and disappears when disconnected.
 
 ### Logs
 

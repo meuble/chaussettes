@@ -2,12 +2,16 @@ require_relative 'logger'
 
 module Chaussettes
   class SSHTunnel
-    attr_reader :server, :pid, :connected
+    attr_reader :server, :pid, :connected, :connected_at, :latency
 
     def initialize
       @server = nil
       @pid = nil
       @connected = false
+      @connected_at = nil
+      @latency = nil
+      @latency_thread = nil
+      @stop_latency_check = false
     end
 
     def connect(server)
@@ -36,8 +40,13 @@ module Chaussettes
         # Check if process is still running
         if process_alive?(@pid)
           @connected = true
+          @connected_at = Time.now
           Logger.info("SSH tunnel successfully started for #{server.display_name}")
           Logger.info("SOCKS proxy available at 127.0.0.1:#{server.socks_port}")
+
+          # Start latency monitoring
+          start_latency_monitoring
+
           true
         else
           Logger.error('SSH process died immediately')
@@ -54,6 +63,9 @@ module Chaussettes
       return false unless @connected
 
       Logger.info("Disconnecting from server: #{@server&.display_name}")
+
+      # Stop latency monitoring
+      stop_latency_monitoring
 
       @connected = false
 
@@ -78,6 +90,8 @@ module Chaussettes
 
       @server = nil
       @pid = nil
+      @connected_at = nil
+      @latency = nil
       true
     end
 
@@ -89,7 +103,64 @@ module Chaussettes
       @server
     end
 
+    def connection_duration
+      return nil unless @connected_at
+
+      Time.now - @connected_at
+    end
+
+    def format_duration(seconds)
+      return '00:00:00' unless seconds
+
+      hours = seconds.to_i / 3600
+      minutes = (seconds.to_i % 3600) / 60
+      secs = seconds.to_i % 60
+      format('%02d:%02d:%02d', hours, minutes, secs)
+    end
+
+    def format_latency
+      @latency ? "#{@latency}ms" : '--'
+    end
+
     private
+
+    def start_latency_monitoring
+      @stop_latency_check = false
+      @latency_thread = Thread.new do
+        loop do
+          break if @stop_latency_check
+
+          check_latency
+          sleep 5
+        end
+      end
+    end
+
+    def stop_latency_monitoring
+      @stop_latency_check = true
+      @latency_thread&.join(1)
+      @latency_thread = nil
+    end
+
+    def check_latency
+      return unless @server
+
+      begin
+        start_time = Time.now
+        # Ping the remote host (1 packet, 2 second timeout)
+        `ping -c 1 -W 2 #{@server.host} 2>/dev/null`
+        if $?.success?
+          @latency = ((Time.now - start_time) * 1000).round(2)
+          Logger.debug("Latency to #{@server.host}: #{@latency}ms")
+        else
+          @latency = nil
+          Logger.debug("Ping failed to #{@server.host}")
+        end
+      rescue StandardError => e
+        Logger.debug("Latency check error: #{e.message}")
+        @latency = nil
+      end
+    end
 
     def build_ssh_command(server)
       cmd_parts = ['ssh']

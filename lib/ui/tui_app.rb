@@ -65,14 +65,33 @@ module Chaussettes
     end
 
     def render_main(frame, tui)
-      main_area, status_area = tui.layout_split(
-        frame.area,
-        direction: :vertical,
-        constraints: [tui.constraint_min(3), tui.constraint_length(3)]
-      )
+      # If connected, show stats panel at top
+      if @current_connection && @ssh_tunnel.connected?
+        top_area, main_area = tui.layout_split(
+          frame.area,
+          direction: :vertical,
+          constraints: [tui.constraint_length(5), tui.constraint_min(3)]
+        )
 
-      render_table(frame, tui, main_area)
-      render_status_bar(frame, tui, status_area)
+        table_area, status_area = tui.layout_split(
+          main_area,
+          direction: :vertical,
+          constraints: [tui.constraint_min(3), tui.constraint_length(3)]
+        )
+
+        render_stats_panel(frame, tui, top_area)
+        render_table(frame, tui, table_area)
+        render_status_bar(frame, tui, status_area)
+      else
+        main_area, status_area = tui.layout_split(
+          frame.area,
+          direction: :vertical,
+          constraints: [tui.constraint_min(3), tui.constraint_length(3)]
+        )
+
+        render_table(frame, tui, main_area)
+        render_status_bar(frame, tui, status_area)
+      end
     end
 
     def render_table(frame, tui, area)
@@ -110,6 +129,29 @@ module Chaussettes
         style: { fg: 'white' }
       )
       frame.render_widget(status_widget, area)
+    end
+
+    def render_stats_panel(frame, tui, area)
+      return unless @current_connection && @ssh_tunnel.connected?
+
+      duration = @ssh_tunnel.format_duration(@ssh_tunnel.connection_duration)
+      latency = @ssh_tunnel.format_latency
+      server = @current_connection.display_name
+      socks_port = @current_connection.socks_port
+
+      stats_text = "Server: #{server} | SOCKS: 127.0.0.1:#{socks_port}\nDuration: #{duration} | Latency: #{latency}"
+
+      stats_widget = tui.paragraph(
+        text: stats_text,
+        block: tui.block(
+          title: ' Connection Stats ',
+          title_alignment: :center,
+          borders: [:all],
+          border_style: { fg: 'green' }
+        ),
+        style: { fg: 'white' }
+      )
+      frame.render_widget(stats_widget, area)
     end
 
     def render_form(frame, tui)

@@ -16,32 +16,39 @@ RSpec.describe Chaussettes::SSHTunnel do
     it 'initializes with disconnected state' do
       expect(tunnel.connected?).to be false
       expect(tunnel.current_server).to be_nil
+      expect(tunnel.connected_at).to be_nil
+      expect(tunnel.latency).to be_nil
     end
   end
 
   describe '#connect' do
     context 'with valid server' do
       before do
-        mock_ssh = double('ssh')
-        mock_forward = double('forward')
-        allow(Net::SSH).to receive(:start).and_yield(mock_ssh)
-        allow(mock_ssh).to receive(:forward).and_return(mock_forward)
-        allow(mock_forward).to receive(:dynamic)
-        allow(mock_ssh).to receive(:loop)
+        allow(tunnel).to receive(:spawn).and_return(12_345)
+        allow(tunnel).to receive(:process_alive?).and_return(true)
+        allow(tunnel).to receive(:`).and_return('') # Mock system ping
       end
 
       it 'returns true on successful connection' do
-        allow_any_instance_of(Thread).to receive(:alive?).and_return(true)
-
         result = tunnel.connect(server)
         expect(result).to be true
       end
 
       it 'sets connected state' do
-        allow_any_instance_of(Thread).to receive(:alive?).and_return(true)
-
         tunnel.connect(server)
         expect(tunnel.current_server).to eq(server)
+        expect(tunnel.connected_at).not_to be_nil
+      end
+
+      it 'starts latency monitoring' do
+        tunnel.connect(server)
+        thread = tunnel.instance_variable_get(:@latency_thread)
+        expect(thread).not_to be_nil
+        expect(thread).to be_alive
+
+        # Stop the thread after test
+        tunnel.instance_variable_set(:@stop_latency_check, true)
+        thread.join(0.1)
       end
     end
 
@@ -54,11 +61,17 @@ RSpec.describe Chaussettes::SSHTunnel do
 
     context 'when already connected' do
       it 'returns false' do
-        allow_any_instance_of(Thread).to receive(:alive?).and_return(true)
-        allow(Net::SSH).to receive(:start)
+        allow(tunnel).to receive(:spawn).and_return(12_345)
+        allow(tunnel).to receive(:process_alive?).and_return(true)
+        allow(tunnel).to receive(:`).and_return('')
 
         tunnel.connect(server)
         expect(tunnel.connect(server)).to be false
+
+        # Stop the thread after test
+        thread = tunnel.instance_variable_get(:@latency_thread)
+        tunnel.instance_variable_set(:@stop_latency_check, true) if thread
+        thread&.join(0.1)
       end
     end
   end
@@ -70,13 +83,11 @@ RSpec.describe Chaussettes::SSHTunnel do
 
     context 'when connected' do
       before do
-        mock_ssh = double('ssh')
-        allow(Net::SSH).to receive(:start).and_yield(mock_ssh)
-        allow(mock_ssh).to receive(:forward).and_return(double(local: nil))
-        allow(mock_ssh).to receive(:loop)
-        allow_any_instance_of(Thread).to receive(:alive?).and_return(true)
-        allow_any_instance_of(Thread).to receive(:kill)
-        allow_any_instance_of(Thread).to receive(:join)
+        allow(tunnel).to receive(:spawn).and_return(12_345)
+        allow(tunnel).to receive(:process_alive?).and_return(true)
+        allow(tunnel).to receive(:`).and_return('')
+        allow(Process).to receive(:kill)
+        allow(Process).to receive(:wait)
 
         tunnel.connect(server)
       end
@@ -89,6 +100,19 @@ RSpec.describe Chaussettes::SSHTunnel do
         tunnel.disconnect
         expect(tunnel.connected?).to be false
         expect(tunnel.current_server).to be_nil
+        expect(tunnel.connected_at).to be_nil
+      end
+
+      it 'stops latency monitoring' do
+        thread = tunnel.instance_variable_get(:@latency_thread)
+        expect(thread).not_to be_nil
+
+        tunnel.disconnect
+
+        # Wait for thread to finish (may be sleeping)
+        thread.join(0.5) if thread.alive?
+
+        expect(tunnel.instance_variable_get(:@stop_latency_check)).to be true
       end
     end
   end
@@ -96,6 +120,87 @@ RSpec.describe Chaussettes::SSHTunnel do
   describe '#connected?' do
     it 'returns false initially' do
       expect(tunnel.connected?).to be false
+    end
+  end
+
+  describe '#connection_duration' do
+    it 'returns nil when not connected' do
+      expect(tunnel.connection_duration).to be_nil
+    end
+
+    it 'returns duration when connected' do
+      allow(tunnel).to receive(:spawn).and_return(12_345)
+      allow(tunnel).to receive(:process_alive?).and_return(true)
+      allow(tunnel).to receive(:`).and_return('')
+
+      tunnel.connect(server)
+
+      # Manually set connected_at to simulate time passing
+      past_time = Time.now - 60
+      tunnel.instance_variable_set(:@connected_at, past_time)
+
+      duration = tunnel.connection_duration
+      expect(duration).to be >= 60
+
+      # Stop the thread after test
+      thread = tunnel.instance_variable_get(:@latency_thread)
+      tunnel.instance_variable_set(:@stop_latency_check, true) if thread
+      thread&.join(0.1)
+    end
+  end
+
+  describe '#format_duration' do
+    it 'formats seconds as HH:MM:SS' do
+      expect(tunnel.format_duration(3661)).to eq('01:01:01')
+    end
+
+    it 'returns 00:00:00 for nil' do
+      expect(tunnel.format_duration(nil)).to eq('00:00:00')
+    end
+  end
+
+  describe '#format_latency' do
+    it 'formats latency with ms' do
+      tunnel.instance_variable_set(:@latency, 45.5)
+      expect(tunnel.format_latency).to eq('45.5ms')
+    end
+
+    it 'returns -- when latency is nil' do
+      expect(tunnel.format_latency).to eq('--')
+    end
+  end
+
+  describe '#latency monitoring' do
+    it 'updates latency on successful ping' do
+      # Mock backticks to return success (exit code 0)
+      allow(tunnel).to receive(:`).with(/ping.*example.com/).and_return('')
+      allow(tunnel).to receive(:check_latency).and_wrap_original do |_m|
+        tunnel.instance_variable_set(:@latency, 45.5)
+      end
+
+      tunnel.instance_variable_set(:@server, server)
+      tunnel.instance_variable_set(:@latency, nil)
+
+      # Call check_latency directly
+      tunnel.send(:check_latency)
+
+      expect(tunnel.latency).not_to be_nil
+      expect(tunnel.latency).to be >= 0
+    end
+
+    it 'sets latency to nil on failed ping' do
+      allow(tunnel).to receive(:`).with(/ping.*example.com/).and_return('')
+      allow(tunnel).to receive(:check_latency).and_wrap_original do |_m|
+        tunnel.instance_variable_set(:@latency, nil)
+      end
+
+      tunnel.instance_variable_set(:@server, server)
+      tunnel.instance_variable_set(:@latency, 45.0)
+
+      # Call check_latency directly
+      tunnel.send(:check_latency)
+
+      expect(tunnel.latency).to be_nil
     end
   end
 end
