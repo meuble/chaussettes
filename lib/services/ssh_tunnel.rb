@@ -2,7 +2,7 @@ require_relative 'logger'
 
 module Chaussettes
   class SSHTunnel
-    attr_reader :server, :pid, :connected, :connected_at, :latency
+    attr_reader :server, :pid, :connected, :connected_at, :latency, :bytes_sent, :bytes_received, :active_connections
 
     def initialize
       @server = nil
@@ -12,6 +12,13 @@ module Chaussettes
       @latency = nil
       @latency_thread = nil
       @stop_latency_check = false
+      @bytes_sent = 0
+      @bytes_received = 0
+      @active_connections = 0
+      @traffic_thread = nil
+      @stop_traffic_check = false
+      @baseline_bytes_sent = 0
+      @baseline_bytes_received = 0
     end
 
     def connect(server)
@@ -47,6 +54,9 @@ module Chaussettes
           # Start latency monitoring
           start_latency_monitoring
 
+          # Start traffic monitoring
+          start_traffic_monitoring
+
           true
         else
           Logger.error('SSH process died immediately')
@@ -66,6 +76,9 @@ module Chaussettes
 
       # Stop latency monitoring
       stop_latency_monitoring
+
+      # Stop traffic monitoring
+      stop_traffic_monitoring
 
       @connected = false
 
@@ -92,6 +105,11 @@ module Chaussettes
       @pid = nil
       @connected_at = nil
       @latency = nil
+      @bytes_sent = 0
+      @bytes_received = 0
+      @active_connections = 0
+      @baseline_bytes_sent = 0
+      @baseline_bytes_received = 0
       true
     end
 
@@ -120,6 +138,31 @@ module Chaussettes
 
     def format_latency
       @latency ? "#{@latency}ms" : '--'
+    end
+
+    def format_bytes(bytes)
+      return '0 B' if bytes.nil? || bytes == 0
+
+      units = %w[B KB MB GB]
+      unit_index = 0
+      size = bytes.to_f
+
+      while size >= 1024 && unit_index < units.length - 1
+        size /= 1024
+        unit_index += 1
+      end
+
+      if unit_index == 0
+        "#{size.to_i} #{units[unit_index]}"
+      else
+        "#{size.round(2)} #{units[unit_index]}"
+      end
+    end
+
+    def format_traffic_stats
+      sent = format_bytes(@bytes_sent)
+      received = format_bytes(@bytes_received)
+      "Sent: #{sent} | Received: #{received}"
     end
 
     private
@@ -159,6 +202,66 @@ module Chaussettes
       rescue StandardError => e
         Logger.debug("Latency check error: #{e.message}")
         @latency = nil
+      end
+    end
+
+    def start_traffic_monitoring
+      @stop_traffic_check = false
+      @traffic_thread = Thread.new do
+        loop do
+          break if @stop_traffic_check
+
+          check_traffic
+          sleep 3
+        end
+      end
+    end
+
+    def stop_traffic_monitoring
+      @stop_traffic_check = true
+      @traffic_thread&.join(1)
+      @traffic_thread = nil
+    end
+
+    def check_traffic
+      return unless @pid && process_alive?(@pid)
+
+      begin
+        # Use lsof to count active network connections for the SSH process
+        output = `lsof -p #{@pid} -i TCP 2>/dev/null`
+        if $?.success?
+          # Count lines that contain network connections (skip header)
+          lines = output.lines.reject { |l| l.start_with?('COMMAND') }
+          @active_connections = lines.count { |l| l.include?('TCP') }
+          Logger.debug("SSH process #{@pid} has #{@active_connections} active connections")
+        end
+
+        # Try to get network interface stats for loopback interface
+        # This gives us system-wide lo0 stats which includes SOCKS traffic
+        ifconfig_output = `netstat -ib 2>/dev/null | grep -E '^lo0' | head -1`
+        if $?.success? && !ifconfig_output.empty?
+          # Parse netstat output: Name Mtu Network Address Ipkts Ierrs Ibytes Opkts Oerrs Obytes Coll
+          # We want Ibytes (received) and Obytes (sent)
+          parts = ifconfig_output.split
+          if parts.length >= 9
+            current_received = parts[6].to_i
+            current_sent = parts[8].to_i
+
+            # On first check, set baseline
+            if @baseline_bytes_received == 0 && @baseline_bytes_sent == 0
+              @baseline_bytes_received = current_received
+              @baseline_bytes_sent = current_sent
+            else
+              # Calculate delta from baseline
+              @bytes_received = [current_received - @baseline_bytes_received, 0].max
+              @bytes_sent = [current_sent - @baseline_bytes_sent, 0].max
+            end
+
+            Logger.debug("Traffic stats - Sent: #{format_bytes(@bytes_sent)}, Received: #{format_bytes(@bytes_received)}")
+          end
+        end
+      rescue StandardError => e
+        Logger.debug("Traffic check error: #{e.message}")
       end
     end
 

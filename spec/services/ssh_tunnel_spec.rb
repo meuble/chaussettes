@@ -18,6 +18,9 @@ RSpec.describe Chaussettes::SSHTunnel do
       expect(tunnel.current_server).to be_nil
       expect(tunnel.connected_at).to be_nil
       expect(tunnel.latency).to be_nil
+      expect(tunnel.bytes_sent).to eq(0)
+      expect(tunnel.bytes_received).to eq(0)
+      expect(tunnel.active_connections).to eq(0)
     end
   end
 
@@ -101,6 +104,9 @@ RSpec.describe Chaussettes::SSHTunnel do
         expect(tunnel.connected?).to be false
         expect(tunnel.current_server).to be_nil
         expect(tunnel.connected_at).to be_nil
+        expect(tunnel.bytes_sent).to eq(0)
+        expect(tunnel.bytes_received).to eq(0)
+        expect(tunnel.active_connections).to eq(0)
       end
 
       it 'stops latency monitoring' do
@@ -201,6 +207,60 @@ RSpec.describe Chaussettes::SSHTunnel do
       tunnel.send(:check_latency)
 
       expect(tunnel.latency).to be_nil
+    end
+  end
+
+  describe '#traffic stats' do
+    describe '#format_bytes' do
+      it 'formats bytes' do
+        expect(tunnel.format_bytes(0)).to eq('0 B')
+        expect(tunnel.format_bytes(512)).to eq('512 B')
+        expect(tunnel.format_bytes(1024)).to eq('1.0 KB')
+        expect(tunnel.format_bytes(1536)).to eq('1.5 KB')
+        expect(tunnel.format_bytes(1024 * 1024)).to eq('1.0 MB')
+        expect(tunnel.format_bytes(1024 * 1024 * 1024)).to eq('1.0 GB')
+      end
+    end
+
+    describe '#format_traffic_stats' do
+      it 'formats traffic stats' do
+        tunnel.instance_variable_set(:@bytes_sent, 1024 * 1024)
+        tunnel.instance_variable_set(:@bytes_received, 512 * 1024)
+        result = tunnel.format_traffic_stats
+        expect(result).to include('Sent: 1.0 MB')
+        expect(result).to include('Received: 512.0 KB')
+      end
+    end
+
+    describe '#traffic monitoring' do
+      it 'starts traffic monitoring thread on connect' do
+        allow(tunnel).to receive(:spawn).and_return(12_345)
+        allow(tunnel).to receive(:process_alive?).and_return(true)
+        allow(tunnel).to receive(:`).and_return('')
+
+        tunnel.connect(server)
+
+        thread = tunnel.instance_variable_get(:@traffic_thread)
+        expect(thread).not_to be_nil
+        expect(thread).to be_alive
+
+        # Stop threads after test
+        tunnel.instance_variable_set(:@stop_traffic_check, true)
+        thread.join(0.1)
+      end
+
+      it 'stops traffic monitoring on disconnect' do
+        allow(tunnel).to receive(:spawn).and_return(12_345)
+        allow(tunnel).to receive(:process_alive?).and_return(true)
+        allow(tunnel).to receive(:`).and_return('')
+        allow(Process).to receive(:kill)
+        allow(Process).to receive(:wait)
+
+        tunnel.connect(server)
+        tunnel.disconnect
+
+        expect(tunnel.instance_variable_get(:@stop_traffic_check)).to be true
+      end
     end
   end
 end

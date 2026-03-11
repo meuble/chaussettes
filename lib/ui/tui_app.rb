@@ -70,7 +70,7 @@ module Chaussettes
         top_area, main_area = tui.layout_split(
           frame.area,
           direction: :vertical,
-          constraints: [tui.constraint_length(5), tui.constraint_min(3)]
+          constraints: [tui.constraint_length(6), tui.constraint_min(3)]
         )
 
         table_area, status_area = tui.layout_split(
@@ -138,8 +138,14 @@ module Chaussettes
       latency = @ssh_tunnel.format_latency
       server = @current_connection.display_name
       socks_port = @current_connection.socks_port
+      traffic = @ssh_tunnel.format_traffic_stats
+      connections = @ssh_tunnel.active_connections
 
-      stats_text = "Server: #{server} | SOCKS: 127.0.0.1:#{socks_port}\nDuration: #{duration} | Latency: #{latency}"
+      stats_text = [
+        "Server: #{server} | SOCKS: 127.0.0.1:#{socks_port}",
+        "Duration: #{duration} | Latency: #{latency} | Connections: #{connections}",
+        traffic
+      ].join("\n")
 
       stats_widget = tui.paragraph(
         text: stats_text,
