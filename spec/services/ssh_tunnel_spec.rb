@@ -36,6 +36,7 @@ RSpec.describe Chaussettes::SSHTunnel do
         allow(tunnel).to receive(:spawn).and_return(12_345)
         allow(tunnel).to receive(:process_alive?).and_return(true)
         allow(tunnel).to receive(:`).and_return('') # Mock system ping
+        allow(tunnel).to receive(:sleep) # Speed up tests by mocking sleep
       end
 
       it 'returns true on successful connection' do
@@ -57,7 +58,7 @@ RSpec.describe Chaussettes::SSHTunnel do
 
         # Stop the thread after test
         tunnel.instance_variable_set(:@stop_latency_check, true)
-        thread.join(0.1)
+        thread.join(0.01)
       end
     end
 
@@ -73,6 +74,7 @@ RSpec.describe Chaussettes::SSHTunnel do
         allow(tunnel).to receive(:spawn).and_return(12_345)
         allow(tunnel).to receive(:process_alive?).and_return(true)
         allow(tunnel).to receive(:`).and_return('')
+        allow(tunnel).to receive(:sleep)
 
         tunnel.connect(server)
         expect(tunnel.connect(server)).to be false
@@ -80,7 +82,7 @@ RSpec.describe Chaussettes::SSHTunnel do
         # Stop the thread after test
         thread = tunnel.instance_variable_get(:@latency_thread)
         tunnel.instance_variable_set(:@stop_latency_check, true) if thread
-        thread&.join(0.1)
+        thread&.join(0.01)
       end
     end
   end
@@ -95,6 +97,7 @@ RSpec.describe Chaussettes::SSHTunnel do
         allow(tunnel).to receive(:spawn).and_return(12_345)
         allow(tunnel).to receive(:process_alive?).and_return(true)
         allow(tunnel).to receive(:`).and_return('')
+        allow(tunnel).to receive(:sleep)
         allow(Process).to receive(:kill)
         allow(Process).to receive(:wait)
 
@@ -121,9 +124,6 @@ RSpec.describe Chaussettes::SSHTunnel do
 
         tunnel.disconnect
 
-        # Wait for thread to finish (may be sleeping)
-        thread.join(0.5) if thread.alive?
-
         expect(tunnel.instance_variable_get(:@stop_latency_check)).to be true
       end
     end
@@ -144,6 +144,7 @@ RSpec.describe Chaussettes::SSHTunnel do
       allow(tunnel).to receive(:spawn).and_return(12_345)
       allow(tunnel).to receive(:process_alive?).and_return(true)
       allow(tunnel).to receive(:`).and_return('')
+      allow(tunnel).to receive(:sleep)
 
       tunnel.connect(server)
 
@@ -157,7 +158,7 @@ RSpec.describe Chaussettes::SSHTunnel do
       # Stop the thread after test
       thread = tunnel.instance_variable_get(:@latency_thread)
       tunnel.instance_variable_set(:@stop_latency_check, true) if thread
-      thread&.join(0.1)
+      thread&.join(0.01)
     end
   end
 
@@ -243,6 +244,7 @@ RSpec.describe Chaussettes::SSHTunnel do
         allow(tunnel).to receive(:spawn).and_return(12_345)
         allow(tunnel).to receive(:process_alive?).and_return(true)
         allow(tunnel).to receive(:`).and_return('')
+        allow(tunnel).to receive(:sleep)
 
         tunnel.connect(server)
 
@@ -252,13 +254,14 @@ RSpec.describe Chaussettes::SSHTunnel do
 
         # Stop threads after test
         tunnel.instance_variable_set(:@stop_traffic_check, true)
-        thread.join(0.1)
+        thread.join(0.01)
       end
 
       it 'stops traffic monitoring on disconnect' do
         allow(tunnel).to receive(:spawn).and_return(12_345)
         allow(tunnel).to receive(:process_alive?).and_return(true)
         allow(tunnel).to receive(:`).and_return('')
+        allow(tunnel).to receive(:sleep)
         allow(Process).to receive(:kill)
         allow(Process).to receive(:wait)
 
@@ -330,6 +333,7 @@ RSpec.describe Chaussettes::SSHTunnel do
         allow(tunnel).to receive(:spawn).and_return(12_345)
         allow(tunnel).to receive(:process_alive?).and_return(true)
         allow(tunnel).to receive(:`).and_return('')
+        allow(tunnel).to receive(:sleep)
         allow(Process).to receive(:kill)
         allow(Process).to receive(:wait)
 
@@ -387,6 +391,7 @@ RSpec.describe Chaussettes::SSHTunnel do
         allow(tunnel).to receive(:spawn).and_return(12_345)
         allow(tunnel).to receive(:process_alive?).and_return(true)
         allow(tunnel).to receive(:`).and_return('')
+        allow(tunnel).to receive(:sleep)
         allow(Process).to receive(:kill)
         allow(Process).to receive(:wait)
 
@@ -414,6 +419,7 @@ RSpec.describe Chaussettes::SSHTunnel do
         allow(tunnel).to receive(:spawn).and_return(12_345)
         allow(tunnel).to receive(:process_alive?).and_return(true)
         allow(tunnel).to receive(:`).and_return('')
+        allow(tunnel).to receive(:sleep)
 
         tunnel.connect(server)
 
@@ -423,13 +429,14 @@ RSpec.describe Chaussettes::SSHTunnel do
 
         # Stop threads after test
         tunnel.instance_variable_set(:@stop_external_ip_check, true)
-        thread.join(0.1)
+        thread.join(0.01)
       end
 
       it 'stops external IP monitoring on disconnect' do
         allow(tunnel).to receive(:spawn).and_return(12_345)
         allow(tunnel).to receive(:process_alive?).and_return(true)
         allow(tunnel).to receive(:`).and_return('')
+        allow(tunnel).to receive(:sleep)
         allow(Process).to receive(:kill)
         allow(Process).to receive(:wait)
 
