@@ -1,9 +1,10 @@
 require_relative 'logger'
+require 'json'
 
 module Chaussettes
   class SSHTunnel
     attr_reader :server, :pid, :connected, :connected_at, :latency, :bytes_sent, :bytes_received, :active_connections,
-                :transfer_history
+                :transfer_history, :external_ip, :external_hostname, :external_location, :external_isp, :external_country, :external_timezone
 
     # Sparkline configuration: 2 minutes of history, 1-second intervals = 120 samples
     SPARKLINE_SAMPLES = 120
@@ -26,6 +27,14 @@ module Chaussettes
       @baseline_bytes_received = 0
       @last_bytes_received = 0
       @transfer_history = []
+      @external_ip = nil
+      @external_hostname = nil
+      @external_location = nil
+      @external_isp = nil
+      @external_country = nil
+      @external_timezone = nil
+      @external_ip_thread = nil
+      @stop_external_ip_check = false
     end
 
     def connect(server)
@@ -64,6 +73,9 @@ module Chaussettes
           # Start traffic monitoring
           start_traffic_monitoring
 
+          # Start external IP monitoring
+          start_external_ip_monitoring
+
           true
         else
           Logger.error('SSH process died immediately')
@@ -86,6 +98,9 @@ module Chaussettes
 
       # Stop traffic monitoring
       stop_traffic_monitoring
+
+      # Stop external IP monitoring
+      stop_external_ip_monitoring
 
       @connected = false
 
@@ -119,6 +134,12 @@ module Chaussettes
       @baseline_bytes_received = 0
       @last_bytes_received = 0
       @transfer_history = []
+      @external_ip = nil
+      @external_hostname = nil
+      @external_location = nil
+      @external_isp = nil
+      @external_country = nil
+      @external_timezone = nil
       true
     end
 
@@ -319,6 +340,50 @@ module Chaussettes
         Logger.debug("Traffic check error: #{e.message}")
       end
     end
+
+    def start_external_ip_monitoring
+      @stop_external_ip_check = false
+      @external_ip_thread = Thread.new do
+        loop do
+          break if @stop_external_ip_check
+
+          check_external_ip
+          sleep 1
+        end
+      end
+    end
+
+    def stop_external_ip_monitoring
+      @stop_external_ip_check = true
+      @external_ip_thread&.join(1)
+      @external_ip_thread = nil
+    end
+
+    def check_external_ip
+      return unless @server
+
+      # Fetch all external IP info from ipinfo.io through the SOCKS proxy
+      # Use --socks5-hostname to route DNS queries through the proxy as well
+      socks_proxy = "127.0.0.1:#{@server.socks_port}"
+      output = `curl -s -m 10 --socks5-hostname #{socks_proxy} https://ipinfo.io/json 2>/dev/null`
+      if $?.success? && !output.empty?
+        data = JSON.parse(output)
+        @external_ip = data['ip']
+        @external_hostname = data['hostname']
+        @external_location = "#{data['city']}, #{data['region']}, #{data['country']}"
+        @external_country = data['country']
+        @external_timezone = data['timezone']
+        # Extract ISP from org field (format: "AS12345 ISP Name")
+        @external_isp = data['org']&.sub(/^AS\d+\s*/, '')
+        Logger.debug("External IP via SOCKS proxy: #{@external_ip}, Location: #{@external_location}, ISP: #{@external_isp}")
+      end
+    rescue JSON::ParserError => e
+      Logger.debug("Failed to parse external IP JSON: #{e.message}")
+    rescue StandardError => e
+      Logger.debug("External IP check error: #{e.message}")
+    end
+
+    def build_ssh_command(server); end
 
     def build_ssh_command(server)
       cmd_parts = ['ssh']

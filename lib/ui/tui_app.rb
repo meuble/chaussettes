@@ -70,7 +70,7 @@ module Chaussettes
         top_area, main_area = tui.layout_split(
           frame.area,
           direction: :vertical,
-          constraints: [tui.constraint_length(8), tui.constraint_min(3)]
+          constraints: [tui.constraint_length(10), tui.constraint_min(3)]
         )
 
         table_area, status_area = tui.layout_split(
@@ -142,9 +142,16 @@ module Chaussettes
       connections = @ssh_tunnel.active_connections
       sparkline = @ssh_tunnel.sparkline
       transfer_rate = @ssh_tunnel.format_transfer_rate(@ssh_tunnel.current_transfer_rate)
+      external_ip = @ssh_tunnel.external_ip || '--'
+      external_hostname = @ssh_tunnel.external_hostname || '--'
+      external_location = @ssh_tunnel.external_location || '--'
+      external_isp = @ssh_tunnel.external_isp || '--'
+      external_country = @ssh_tunnel.external_country || '--'
 
       stats_text = [
         "Server: #{server} | SOCKS: 127.0.0.1:#{socks_port}",
+        "External IP: #{external_ip} (#{external_country}) | Host: #{external_hostname}",
+        "Location: #{external_location} | ISP: #{external_isp}",
         "Duration: #{duration} | Latency: #{latency} | Connections: #{connections}",
         traffic,
         "Transfer Rate: #{transfer_rate}",

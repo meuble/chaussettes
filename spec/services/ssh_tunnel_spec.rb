@@ -21,6 +21,12 @@ RSpec.describe Chaussettes::SSHTunnel do
       expect(tunnel.bytes_sent).to eq(0)
       expect(tunnel.bytes_received).to eq(0)
       expect(tunnel.active_connections).to eq(0)
+      expect(tunnel.external_ip).to be_nil
+      expect(tunnel.external_hostname).to be_nil
+      expect(tunnel.external_location).to be_nil
+      expect(tunnel.external_isp).to be_nil
+      expect(tunnel.external_country).to be_nil
+      expect(tunnel.external_timezone).to be_nil
     end
   end
 
@@ -312,6 +318,125 @@ RSpec.describe Chaussettes::SSHTunnel do
       it 'handles zero' do
         result = tunnel.format_transfer_rate(0)
         expect(result).to eq('0 B/s')
+      end
+    end
+
+    describe '#external_ip' do
+      it 'is nil initially' do
+        expect(tunnel.external_ip).to be_nil
+      end
+
+      it 'resets to nil on disconnect' do
+        allow(tunnel).to receive(:spawn).and_return(12_345)
+        allow(tunnel).to receive(:process_alive?).and_return(true)
+        allow(tunnel).to receive(:`).and_return('')
+        allow(Process).to receive(:kill)
+        allow(Process).to receive(:wait)
+
+        tunnel.connect(server)
+        tunnel.instance_variable_set(:@external_ip, '203.0.113.1')
+        tunnel.instance_variable_set(:@external_hostname, 'test.example.com')
+        tunnel.instance_variable_set(:@external_location, 'Paris, IDF, FR')
+        tunnel.instance_variable_set(:@external_isp, 'Free SAS')
+        tunnel.instance_variable_set(:@external_country, 'FR')
+        tunnel.instance_variable_set(:@external_timezone, 'Europe/Paris')
+
+        tunnel.disconnect
+
+        expect(tunnel.external_ip).to be_nil
+        expect(tunnel.external_hostname).to be_nil
+        expect(tunnel.external_location).to be_nil
+        expect(tunnel.external_isp).to be_nil
+        expect(tunnel.external_country).to be_nil
+        expect(tunnel.external_timezone).to be_nil
+      end
+    end
+
+    describe '#external_hostname' do
+      it 'is nil initially' do
+        expect(tunnel.external_hostname).to be_nil
+      end
+    end
+
+    describe '#external_location' do
+      it 'is nil initially' do
+        expect(tunnel.external_location).to be_nil
+      end
+    end
+
+    describe '#external_isp' do
+      it 'is nil initially' do
+        expect(tunnel.external_isp).to be_nil
+      end
+    end
+
+    describe '#external_country' do
+      it 'is nil initially' do
+        expect(tunnel.external_country).to be_nil
+      end
+    end
+
+    describe '#external_timezone' do
+      it 'is nil initially' do
+        expect(tunnel.external_timezone).to be_nil
+      end
+    end
+
+    describe '#external_ip reset' do
+      it 'resets all external fields to nil on disconnect' do
+        allow(tunnel).to receive(:spawn).and_return(12_345)
+        allow(tunnel).to receive(:process_alive?).and_return(true)
+        allow(tunnel).to receive(:`).and_return('')
+        allow(Process).to receive(:kill)
+        allow(Process).to receive(:wait)
+
+        tunnel.connect(server)
+        tunnel.instance_variable_set(:@external_ip, '203.0.113.1')
+        tunnel.instance_variable_set(:@external_hostname, 'test.example.com')
+        tunnel.instance_variable_set(:@external_location, 'Paris, IDF, FR')
+        tunnel.instance_variable_set(:@external_isp, 'Free SAS')
+        tunnel.instance_variable_set(:@external_country, 'FR')
+        tunnel.instance_variable_set(:@external_timezone, 'Europe/Paris')
+
+        tunnel.disconnect
+
+        expect(tunnel.external_ip).to be_nil
+        expect(tunnel.external_hostname).to be_nil
+        expect(tunnel.external_location).to be_nil
+        expect(tunnel.external_isp).to be_nil
+        expect(tunnel.external_country).to be_nil
+        expect(tunnel.external_timezone).to be_nil
+      end
+    end
+
+    describe '#external_ip monitoring' do
+      it 'starts external IP monitoring thread on connect' do
+        allow(tunnel).to receive(:spawn).and_return(12_345)
+        allow(tunnel).to receive(:process_alive?).and_return(true)
+        allow(tunnel).to receive(:`).and_return('')
+
+        tunnel.connect(server)
+
+        thread = tunnel.instance_variable_get(:@external_ip_thread)
+        expect(thread).not_to be_nil
+        expect(thread).to be_alive
+
+        # Stop threads after test
+        tunnel.instance_variable_set(:@stop_external_ip_check, true)
+        thread.join(0.1)
+      end
+
+      it 'stops external IP monitoring on disconnect' do
+        allow(tunnel).to receive(:spawn).and_return(12_345)
+        allow(tunnel).to receive(:process_alive?).and_return(true)
+        allow(tunnel).to receive(:`).and_return('')
+        allow(Process).to receive(:kill)
+        allow(Process).to receive(:wait)
+
+        tunnel.connect(server)
+        tunnel.disconnect
+
+        expect(tunnel.instance_variable_get(:@stop_external_ip_check)).to be true
       end
     end
   end

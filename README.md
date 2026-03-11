@@ -61,6 +61,7 @@ You can add the executable to your `PATH` to run it from anywhere.
 4. Status will show as "● Connected" when successful
 5. A **Connection Stats** panel appears at the top showing:
    - Server name and SOCKS port
+   - **External connection info** - Shows your public IP, hostname, location, ISP, and timezone via ipinfo.io (updated every 30s)
    - Connection duration (HH:MM:SS format)
    - Latency to remote server (ping time in ms)
    - Active connections count
@@ -91,6 +92,16 @@ This file is automatically managed by the application.
 When connected to a server, the application displays real-time statistics:
 
 **Connection Duration**: Tracks how long you've been connected (updated every frame)
+
+**External Connection Info**: Fetches and displays your public connection details from ipinfo.io every 30 seconds:
+- **IP Address**: Your public IPv4 address (e.g., "78.192.193.72")
+- **Hostname**: Reverse DNS hostname (e.g., "mil75-5-78-192-193-72.fbxo.proxad.net")
+- **Country Code**: ISO country code (e.g., "FR")
+- **Location**: City, region, and country (e.g., "Paris, Île-de-France, FR")
+- **ISP**: Your internet service provider name (e.g., "Free SAS")
+- **Timezone**: Your timezone (e.g., "Europe/Paris")
+
+This helps verify that your SOCKS proxy is working correctly and shows what IP address and location you're appearing as to the outside world.
 
 **Latency Monitoring**: Background thread pings the remote server every 1 second to measure round-trip time
 
