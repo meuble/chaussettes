@@ -2,6 +2,8 @@
 
 A minimal macOS TUI (Terminal User Interface) application for managing SSH SOCKS proxy tunnels.
 
+![Screenshot](docs/screenshot.png)
+
 ## Features
 
 - **Terminal-based UI** - Clean, keyboard-driven interface using Ratatui
