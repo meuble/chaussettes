@@ -65,6 +65,7 @@ You can add the executable to your `PATH` to run it from anywhere.
    - Latency to remote server (ping time in ms)
    - Active connections count
    - Data transferred (bytes sent/received)
+   - Transfer rate with ASCII sparkline showing 2 minutes of traffic history
 
 ### Disconnecting
 
@@ -91,11 +92,12 @@ When connected to a server, the application displays real-time statistics:
 
 **Connection Duration**: Tracks how long you've been connected (updated every frame)
 
-**Latency Monitoring**: Background thread pings the remote server every 5 seconds to measure round-trip time
+**Latency Monitoring**: Background thread pings the remote server every 1 second to measure round-trip time
 
 **Traffic Monitoring**: Monitors network activity through the SOCKS proxy:
-- **Active Connections**: Number of active TCP connections through the SSH tunnel (updated every 3 seconds via `lsof`)
-- **Data Transferred**: Tracks bytes sent and received through the loopback interface (updated every 3 seconds via `netstat`)
+- **Active Connections**: Number of active TCP connections through the SSH tunnel (updated every 1 second via `lsof`)
+- **Data Transferred**: Tracks bytes sent and received through the loopback interface (updated every 1 second via `netstat`)
+- **Transfer Rate & Sparkline**: Shows current transfer speed with an ASCII sparkline (▁▂▃▄▅▆▇█) visualizing the last 2 minutes of traffic history (120 samples at 1-second intervals). This gives you a quick visual indication of traffic patterns and throughput over time.
 - Stats are shown in human-readable format (B, KB, MB, GB)
 
 The stats panel appears automatically at the top of the screen when connected and disappears when disconnected.

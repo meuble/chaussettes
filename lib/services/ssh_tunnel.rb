@@ -2,7 +2,12 @@ require_relative 'logger'
 
 module Chaussettes
   class SSHTunnel
-    attr_reader :server, :pid, :connected, :connected_at, :latency, :bytes_sent, :bytes_received, :active_connections
+    attr_reader :server, :pid, :connected, :connected_at, :latency, :bytes_sent, :bytes_received, :active_connections,
+                :transfer_history
+
+    # Sparkline configuration: 2 minutes of history, 1-second intervals = 120 samples
+    SPARKLINE_SAMPLES = 120
+    SPARKLINE_CHARS = ['▁', '▂', '▃', '▄', '▅', '▆', '▇', '█'].freeze
 
     def initialize
       @server = nil
@@ -19,6 +24,8 @@ module Chaussettes
       @stop_traffic_check = false
       @baseline_bytes_sent = 0
       @baseline_bytes_received = 0
+      @last_bytes_received = 0
+      @transfer_history = []
     end
 
     def connect(server)
@@ -110,6 +117,8 @@ module Chaussettes
       @active_connections = 0
       @baseline_bytes_sent = 0
       @baseline_bytes_received = 0
+      @last_bytes_received = 0
+      @transfer_history = []
       true
     end
 
@@ -165,6 +174,40 @@ module Chaussettes
       "Sent: #{sent} | Received: #{received}"
     end
 
+    def sparkline(data = @transfer_history, width = 20)
+      return ' ' * width if data.empty?
+
+      # Use only the last N samples based on width
+      samples = data.last([width, data.length].min)
+      return ' ' * width if samples.empty?
+
+      max = samples.max.to_f
+      min = samples.min.to_f
+      range = max - min
+
+      # Generate sparkline characters
+      samples.map do |value|
+        if range == 0
+          SPARKLINE_CHARS[0] # All same value, use lowest char
+        else
+          # Normalize to 0-7 range for sparkline chars
+          normalized = ((value - min) / range * (SPARKLINE_CHARS.length - 1)).round
+          SPARKLINE_CHARS[[normalized, SPARKLINE_CHARS.length - 1].min]
+        end
+      end.join
+    end
+
+    def current_transfer_rate
+      return 0 if @transfer_history.empty?
+
+      @transfer_history.last
+    end
+
+    def format_transfer_rate(bytes_per_second)
+      # Format bytes per second directly
+      format_bytes(bytes_per_second.to_i) + '/s'
+    end
+
     private
 
     def start_latency_monitoring
@@ -174,7 +217,7 @@ module Chaussettes
           break if @stop_latency_check
 
           check_latency
-          sleep 5
+          sleep 1
         end
       end
     end
@@ -212,7 +255,7 @@ module Chaussettes
           break if @stop_traffic_check
 
           check_traffic
-          sleep 3
+          sleep 1
         end
       end
     end
@@ -253,11 +296,23 @@ module Chaussettes
               @baseline_bytes_sent = current_sent
             else
               # Calculate delta from baseline
-              @bytes_received = [current_received - @baseline_bytes_received, 0].max
-              @bytes_sent = [current_sent - @baseline_bytes_sent, 0].max
+              new_bytes_received = [current_received - @baseline_bytes_received, 0].max
+              new_bytes_sent = [current_sent - @baseline_bytes_sent, 0].max
+
+              # Calculate transfer rate (delta since last check)
+              delta_received = [new_bytes_received - @last_bytes_received, 0].max
+
+              # Store in history (bytes per 3 seconds)
+              @transfer_history << delta_received
+              @transfer_history.shift if @transfer_history.length > SPARKLINE_SAMPLES
+
+              # Update tracking variables
+              @bytes_received = new_bytes_received
+              @bytes_sent = new_bytes_sent
+              @last_bytes_received = new_bytes_received
             end
 
-            Logger.debug("Traffic stats - Sent: #{format_bytes(@bytes_sent)}, Received: #{format_bytes(@bytes_received)}")
+            Logger.debug("Traffic stats - Sent: #{format_bytes(@bytes_sent)}, Received: #{format_bytes(@bytes_received)}, Rate: #{format_transfer_rate(delta_received || 0)}")
           end
         end
       rescue StandardError => e

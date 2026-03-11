@@ -262,5 +262,57 @@ RSpec.describe Chaussettes::SSHTunnel do
         expect(tunnel.instance_variable_get(:@stop_traffic_check)).to be true
       end
     end
+
+    describe '#sparkline' do
+      it 'returns empty spaces for no data' do
+        expect(tunnel.sparkline([], 10)).to eq(' ' * 10)
+      end
+
+      it 'generates sparkline with correct characters' do
+        # Test with simple data [0, 4, 8] should map to different chars
+        data = [0, 100, 200, 300, 400, 500, 600, 700]
+        result = tunnel.sparkline(data, 8)
+        expect(result.length).to eq(8)
+        # Should use sparkline characters ▁▂▃▄▅▆▇█
+        expect(result).to match(/[▁▂▃▄▅▆▇█]+/)
+      end
+
+      it 'uses only the last N samples based on width' do
+        data = (1..50).to_a
+        result = tunnel.sparkline(data, 10)
+        expect(result.length).to eq(10)
+      end
+
+      it 'handles all same values' do
+        data = [100, 100, 100, 100]
+        result = tunnel.sparkline(data, 4)
+        expect(result).to eq('▁▁▁▁')
+      end
+    end
+
+    describe '#current_transfer_rate' do
+      it 'returns 0 when no history' do
+        expect(tunnel.current_transfer_rate).to eq(0)
+      end
+
+      it 'returns last value in history' do
+        tunnel.instance_variable_set(:@transfer_history, [100, 200, 300])
+        expect(tunnel.current_transfer_rate).to eq(300)
+      end
+    end
+
+    describe '#format_transfer_rate' do
+      it 'formats bytes per second' do
+        # 100 bytes per second (now collected directly)
+        result = tunnel.format_transfer_rate(100)
+        expect(result).to include('100')
+        expect(result).to include('/s')
+      end
+
+      it 'handles zero' do
+        result = tunnel.format_transfer_rate(0)
+        expect(result).to eq('0 B/s')
+      end
+    end
   end
 end
